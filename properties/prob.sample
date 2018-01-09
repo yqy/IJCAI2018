@@ -1,0 +1,13 @@
+# this is the properties of neural network
+
+embedding_size = 36103
+embedding_dimention = 100
+#feature_dimention = 84
+feature_dimention = 61
+hidden_dimention = 128
+
+lr = 0.0003
+epoch = 100 
+batch_size = 128
+l2 = 0.000001
+dropout = 0.2
