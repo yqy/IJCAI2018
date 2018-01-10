@@ -18,10 +18,6 @@ from conf import *
 
 # if gpu is to be used
 use_cuda = torch.cuda.is_available()
-if use_cuda:
-    print >> sys.stderr, "GPU is available!"
-else:
-    print >> sys.stderr, "GPU is not available!"
 FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 ByteTensor = torch.cuda.ByteTensor if use_cuda else torch.ByteTensor
