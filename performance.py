@@ -45,7 +45,18 @@ def get_predict_max(data):
                 max_pro = output[i][1]
         predict.append(result[max_index])
     return predict
- 
+
+def get_predict_nearest(data):
+    predict = []
+    for result,output in data:
+        max_index = -1
+        for i in range(len(output)):
+            if output[i][1] > output[i][0]:
+            #if output[i][1] > 0.1:
+                max_index = i
+        predict.append(result[max_index])
+    return predict
+  
  
 def get_evaluate(data):
     best_result = {}
@@ -55,12 +66,33 @@ def get_evaluate(data):
     predict = get_predict_max(data)
     result = evaluate(predict)
     best_result = result
-    best_result["t"] = -1
 
-    print >> sys.stderr, "Hits",best_result["hits"]
-    print "Hits",best_result["hits"]
-    print "Best thresh",best_result["t"]
+    print >> sys.stderr, "Best Hits",best_result["hits"]
+    print "Best Hits",best_result["hits"]
     print "R",best_result["r"],"P",best_result["p"],"F",best_result["f"]
+
+    return best_result
+
+    best_result = {}
+    best_result["hits"] = 0
+    res_t = [0.05,0.1,0.15,0.2,0.25,0.3,0.5]
+    # nearest first
+    for t in res_t:
+        predict = get_predict(data,t)
+        result = evaluate(predict)
+        if result["hits"] > best_result["hits"]:
+            best_result = result
+            best_result["t"] = t 
+
+    # nearest first
+    #predict = get_predict_nearest(data)
+    #result = evaluate(predict)
+    #best_result = result
+
+    print >> sys.stderr, "Nearest Hits",best_result["hits"]
+    print "Nearest Hits",best_result["hits"],"thresh",best_result["t"]
+    print "R",best_result["r"],"P",best_result["p"],"F",best_result["f"]
+
 
 def evaluate(predict):
     result = {}
@@ -113,12 +145,14 @@ def get_performance(test_generater,model):
 
         output,output_softmax = model.generate_score(zp_pre_representation,zp_post_representation,candi_representation,feature)
         output_softmax = output_softmax.data.cpu().numpy()
-        predict.append((data["result"],output_softmax))
+        for s,e in data["start2end"]:
+            if s == e:
+                continue
+            predict.append((data["result"][s:e],output_softmax[s:e]))
 
-    get_evaluate(predict)
-    #print "Use RL Method Hits,", HITS
-    #print >> sys.stderr, "Use RL Method Hits,", HITS
+    br = get_evaluate(predict)
     print
     sys.stdout.flush()
+    return br
 if __name__ == "__main__":
     main()

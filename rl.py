@@ -25,6 +25,7 @@ from data_generater import *
 from net import *
 import performance
 random.seed(args.random_seed)
+numpy.random.seed(args.random_seed)
 
 print >> sys.stderr, "PID", os.getpid()
 
@@ -42,29 +43,36 @@ def main():
     #train_generater = DataGnerater("test",0)
     train_generater = DataGnerater("train",nnargs["batch_size"])
     #train_generater = DataGnerater("test",nnargs["batch_size"])
-    test_generater = DataGnerater("test",0)
+    test_generater = DataGnerater("test",256)
 
     embedding_matrix = numpy.load(args.data + "embedding.npy")
     print "Building torch model"
 
     model = Network(nnargs["embedding_size"],nnargs["embedding_dimention"],embedding_matrix,nnargs["hidden_dimention"],2).cuda()
-    best_model = torch.load("./model/model.best")
-    net_copy(model,best_model)
+    best_model_ = torch.load("./model/model.pretrain.best")
+    net_copy(model,best_model_)
+
+    best_model = model
 
     performance.get_performance(test_generater,model) 
-    #performance.get_performance(train_generater,model) 
 
     this_lr = nnargs["lr"]
     #optimizer = optim.Adagrad(model.parameters(),lr=this_lr)
-    optimizer = optim.Adadelta(model.parameters(),lr=this_lr)
-    #scheduler = lr_scheduler.StepLR(optimizer, step_size=1000, gamma=0.99) # go 100 times and reduce lr=lr*0.99
+    best_result = {}
+    best_result["hits"] = 0
 
     for echo in range(nnargs["epoch"]):
         cost = 0.0
         baseline = []
         print >> sys.stderr, "Begin epoch",echo
+        #optimizer = optim.Adadelta(model.parameters(),lr=this_lr)
+        #optimizer = optim.Adam(model.parameters(),lr=this_lr)
+        #optimizer = optim.RMSprop(model.parameters(),lr=this_lr)
+
+        optimizer = optim.Adagrad(model.parameters(),lr=this_lr) #best
+        this_lr = this_lr*0.5
+
         for data in train_generater.generate_data(shuffle=True):
-            #scheduler.step()
             #zp
             zp_reindex = autograd.Variable(torch.from_numpy(data["zp_reindex"]).type(torch.cuda.LongTensor))
             zp_pre = autograd.Variable(torch.from_numpy(data["zp_pre"]).type(torch.cuda.LongTensor))
@@ -100,43 +108,26 @@ def main():
                 hidden_candi = model.forward_np(candi[i],hidden_candi,dropout=nnargs["dropout"])*torch.transpose(mask_candi[i:i+1],0,1)
             candi_representation = hidden_candi[candi_reindex]
 
-            path = []
-            nps = []
             output,output_softmax = model.generate_score(zp_pre_representation,zp_post_representation,candi_representation,feature,dropout=nnargs["dropout"])
-            for i in range(len(output_softmax)):
-                prob = output_softmax[i]
-                action_probs = prob.data.cpu().numpy()
-                #if action_probs[1] > action_probs[0]:
-                if random.random() <= action_probs[1]:
-                    nps.append(i)
-                    path.append(1)
-                else:
-                    path.append(0)
 
-            '''
-            nps = []
-            hidden_nps = model.initHidden()
-            path = []
-            for (zpi,i) in zip(zp_reindex,candi_reindex):
-                output_softmax = model.generate_score_rl(zp_pre_representation[zpi],zp_post_representation[zpi],candi_representation[i],hidden_nps,feature[i],dropout=nnargs["dropout"])
-                action_probs = output_softmax.data.cpu().numpy()[0][1]
-                need_index = i.data.cpu().numpy()[0]
-                if random.random() <= action_probs: # regard it as an output
-                    nps.append(need_index)
-                    hidden_nps = model.forward_nps(candi_representation[i],hidden_nps)
-                    path.append(1)
-                else:
-                    path.append(0)
-            '''
+            noneed = output_softmax[:,0].data.cpu().numpy()
+            need = output_softmax[:,1].data.cpu().numpy()
+            trick = need-noneed
+            path = numpy.clip(numpy.floor(trick), -1, 0).astype(int)+1
+
+            #thres = output_softmax[:,1].data.cpu().numpy()
+            #ran = numpy.random.rand(len(thres))
+            #path = numpy.clip(numpy.floor(ran / thres), 1, 0).astype(int)
 
             gold = data["result"]
-            if float(sum(gold)) == 0 or len(gold[nps]) == 0:
+            if float(sum(gold)) == 0 or sum(gold*path) == 0 or sum(path) == 0:
                 continue
-            precision = float(sum(gold[nps]))/float(len(gold[nps]))
-            recall = float(sum(gold[nps]))/float(sum(gold))
+            precision = float(sum(gold*path))/float(sum(path))
+            recall = float(sum(gold*path))/float(sum(gold))
             f = 2.0/(1.0/precision+1.0/recall) if (recall > 0 and precision > 0) else 0.0
             if f == 0:
                 continue
+
             '''
             hit = 0
             for i in range(len(path)):
@@ -148,76 +139,53 @@ def main():
             '''
 
             #reward = -1.0*f
-
             #base = sum(baseline)/float(len(baseline)) if len(baseline) > 0 else 0.0
             #reward = -1.0*(f-base)
             #baseline.append(f)
             #if len(baseline) > 64:
             #    baseline = baseline[1:]
  
-            rewards = []
-            for i in range(len(output_softmax)):
-                new_nps = copy.deepcopy(nps)
-                pa = path[i]
-                if pa == 1:
-                    new_nps.remove(i)
-                else:
-                    new_nps.append(i)
+            rewards = numpy.full((len(path),2),f)
+            path_list = path.tolist()
 
-                if float(sum(gold)) == 0 or len(gold[new_nps]) == 0:
+            for i in range(len(path_list)):
+                new_path = copy.deepcopy(path_list)
+                new_path[i] = 1-new_path[i]
+
+                if float(sum(gold)) == 0 or sum(gold*new_path) == 0 or sum(new_path) == 0:
                     new_f = 0.0
                 else:
-                    new_precision = float(sum(gold[new_nps]))/float(len(gold[new_nps]))
-                    new_recall = float(sum(gold[new_nps]))/float(sum(gold))
+                    new_precision = float(sum(gold*new_path))/float(sum(new_path))
+                    new_recall = float(sum(gold*new_path))/float(sum(gold))
                     new_f = 2.0/(1.0/new_precision+1.0/new_recall) if (new_recall > 0 and new_precision > 0) else 0.0
+                rewards[i][new_path[i]] = new_f
+            
+            #maxs = rewards.max(axis=1)[:,numpy.newaxis]
+            maxs = rewards.min(axis=1)[:,numpy.newaxis]
+            rewards = rewards - maxs
+            rewards *= -10.0
 
-                if pa == 1:
-                    rewards.append(new_f)
-                    rewards.append(f)
-                else:
-                    rewards.append(f)
-                    rewards.append(new_f)
-            rewards = numpy.array(rewards)
-            #rewards -= rewards.max()
-            #rewards *= -10
-
+            rewards = autograd.Variable(torch.from_numpy(rewards).type(torch.cuda.FloatTensor))
+            
             optimizer.zero_grad()
             #output_softmax = torch.log(output_softmax)
-            loss = None
-            for i in range(len(output_softmax)):
-                pa = path[i]
-                gol = gold[i]
-                reward_0 = rewards[i*2]
-                reward_1 = rewards[i*2+1] 
-                max_t = max(reward_0,reward_1)
-
-                reward_0 -= max_t
-                reward_1 -= max_t
-
-                reward_0 = reward_0*-10
-                reward_1 = reward_1*-10
-
-                #this_reward = -1.0*(res+f)
-                #this_reward = -1.0*(res)
-                #this_reward = -1.0*f
-                #print output_softmax[i]
-                #print reward_0,reward_1
-
-                if loss is None:
-                    loss = output_softmax[i][0]*reward_0 + output_softmax[i][1]*reward_1
-                    #loss = output_softmax[i][pa]*this_reward
-                else:
-                    loss += (output_softmax[i][0]*reward_0 + output_softmax[i][1]*reward_1)
-                    #loss += output_softmax[i][pa]*this_reward
-
-            #loss = loss/len(output_softmax)
-
+            loss = torch.sum(output_softmax*rewards)
+            #loss = torch.mean(output_softmax*rewards)
             cost += loss.data[0]
             loss.backward()
             optimizer.step()
         print >> sys.stderr, "End epoch",echo,"Cost:", cost
 
         print "Result for epoch",echo 
-        performance.get_performance(test_generater,model) 
+        result = performance.get_performance(test_generater,model) 
+        if result["hits"] >= best_result["hits"]:
+            best_result = result
+            best_result["epoch"] = echo
+            best_model = model
+            torch.save(best_model, "./model/model.best")
+
+    print "Best Result on epoch", best_result["epoch"]
+    print "Hits",best_result["hits"]
+    print "R",best_result["r"],"P",best_result["p"],"F",best_result["f"]
 if __name__ == "__main__":
     main()

@@ -227,7 +227,7 @@ def main():
             best_result = result
             best_result["epoch"] = echo 
             best_model = model 
-            #torch.save(best_model, "./model/model.best")
+            torch.save(best_model, "./model/model.pretrain.best")
         sys.stdout.flush()
 
     print "Best Result on epoch", best_result["epoch"]
