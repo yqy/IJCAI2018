@@ -5,8 +5,8 @@ embedding_dimention = 100
 feature_dimention = 84
 hidden_dimention = 128
 
-epoch = 100 
-lr = 0.001
-batch_size = 128
+epoch = 100
+lr = 0.003
+batch_size = 256
 l2 = 0.000001
 dropout = 0.2

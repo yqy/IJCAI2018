@@ -60,7 +60,7 @@ def get_predict_max(data):
  
  
 def get_evaluate(data):
-    res_t = [0.3,0.35,0.4,0.45,0.5,0.55,0.6]
+    res_t = [0.05,0.1,0.15,0.2,0.25,0.3]
     best_result = {}
     best_result["hits"] = 0
 
@@ -122,6 +122,8 @@ def main():
 
         optimizer = optim.Adagrad(model.parameters(), lr=this_lr)
         if (echo+1)%10 == 0:
+            this_lr *= 0.9
+        if (echo+1)%20 == 0:
             this_lr *= 0.9
     
         for data in train_generater.generate_data(shuffle=True):
