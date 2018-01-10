@@ -109,8 +109,7 @@ def main():
     model = Network(nnargs["embedding_size"],nnargs["embedding_dimention"],embedding_matrix,nnargs["hidden_dimention"],2).cuda()
 
     this_lr = nnargs["lr"]
-    optimizer = optim.Adagrad(model.parameters(), lr=this_lr)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
+    #scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
 
     best_result = {}
     best_result["hits"] = 0
@@ -118,8 +117,12 @@ def main():
      
     for echo in range(nnargs["epoch"]):
         cost = 0.0
-        scheduler.step()
+        #scheduler.step()
         print >> sys.stderr, "Begin epoch",echo
+
+        optimizer = optim.Adagrad(model.parameters(), lr=this_lr)
+        if (echo+1)%10 == 0:
+            this_lr *= 0.9
     
         for data in train_generater.generate_data(shuffle=True):
             #zp
@@ -222,7 +225,7 @@ def main():
             best_result = result
             best_result["epoch"] = echo 
             best_model = model 
-            torch.save(best_model, "./model/model.best")
+            #torch.save(best_model, "./model/model.best")
         sys.stdout.flush()
 
     print "Best Result on epoch", best_result["epoch"]
