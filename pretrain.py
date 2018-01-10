@@ -16,7 +16,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.autograd as autograd
 import torchvision.transforms as T
-import torch.optim as optim
+from torch.optim import lr_scheduler
+
 
 from conf import *
 import utils
@@ -59,7 +60,7 @@ def get_predict_max(data):
  
  
 def get_evaluate(data):
-    res_t = [0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6]
+    res_t = [0.3,0.35,0.4,0.45,0.5,0.55,0.6]
     best_result = {}
     best_result["hits"] = 0
 
@@ -100,27 +101,24 @@ MAX = 2
 
 def main():
     train_generater = DataGnerater("train",nnargs["batch_size"])
-    test_generater = DataGnerater("test",0)
+    test_generater = DataGnerater("test",256)
 
     embedding_matrix = numpy.load(args.data + "embedding.npy")
     print "Building torch model"
 
-    #model = Network(nnargs["embedding_size"],nnargs["embedding_dimention"],embedding_matrix,nnargs["hidden_dimention"],1).cuda()
     model = Network(nnargs["embedding_size"],nnargs["embedding_dimention"],embedding_matrix,nnargs["hidden_dimention"],2).cuda()
+
+    this_lr = nnargs["lr"]
+    optimizer = optim.Adagrad(model.parameters(), lr=this_lr)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
+
     best_result = {}
     best_result["hits"] = 0
     best_model = None
      
     for echo in range(nnargs["epoch"]):
-
-        this_lr = nnargs["lr"]
-        
-        if (echo+1)%10 == 0:
-            this_lr = this_lr*0.8       
-
-        #optimizer = optim.Adagrad(model.parameters(), lr=this_lr, weight_decay = nnargs["l2"])
-        optimizer = optim.Adagrad(model.parameters(), lr=this_lr)
         cost = 0.0
+        scheduler.step()
         print >> sys.stderr, "Begin epoch",echo
     
         for data in train_generater.generate_data(shuffle=True):
@@ -213,14 +211,23 @@ def main():
     
             output,output_softmax = model.generate_score(zp_pre_representation,zp_post_representation,candi_representation,feature)
             output_softmax = output_softmax.data.cpu().numpy()
-            predict.append((data["result"],output_softmax))
+            for s,e in data["start2end"]:
+                if s == e:
+                    continue
+                predict.append((data["result"][s:e],output_softmax[s:e]))
 
         print "Result for epoch",echo 
         result = get_evaluate(predict)
         if result["hits"] > best_result["hits"]:
             best_result = result
+            best_result["epoch"] = echo 
             best_model = model 
             torch.save(best_model, "./model/model.best")
         sys.stdout.flush()
+
+    print "Best Result on epoch", best_result["epoch"]
+    print "Hits",best_result["hits"]
+    print "R",best_result["r"],"P",best_result["p"],"F",best_result["f"]
+ 
 if __name__ == "__main__":
     main()
