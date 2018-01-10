@@ -46,6 +46,8 @@ class DataGnerater():
         this_target = [] 
         this_result = []
 
+        start2end = []
+
         for i in range(len(zp_candis_pair)):
             zpi,candis = zp_candis_pair[i]
             if len(candis)+len(candi_reindex) > max_pair and len(candi_reindex) > 0:
@@ -68,6 +70,8 @@ class DataGnerater():
                 this_batch["candi"] = self.candi_vec[ci_s:ci_e]
                 this_batch["candi_mask"] = self.candi_vec_mask[ci_s:ci_e]
                 this_batch["fl"] = self.ifl_vec[ci_s:ci_e]
+                
+                this_batch["start2end"] = start2end
 
                 self.data_batch.append(this_batch)
                
@@ -75,11 +79,17 @@ class DataGnerater():
                 candi_reindex = []
                 this_target = [] 
                 this_result = []
+                start2end = []
+
+            start = len(this_result)
+            end = start
             for candii,res in candis:
                 zp_reindex.append(zpi)
                 candi_reindex.append(candii)
                 this_target.append([res])
                 this_result.append(res)
+                end += 1
+            start2end.append((start,end))
 
         if len(candi_reindex) > 0:
             ci_s = candi_reindex[0]
@@ -100,6 +110,8 @@ class DataGnerater():
             this_batch["candi"] = self.candi_vec[ci_s:ci_e]
             this_batch["candi_mask"] = self.candi_vec_mask[ci_s:ci_e]
             this_batch["fl"] = self.ifl_vec[ci_s:ci_e]
+
+            this_batch["start2end"] = start2end
 
             self.data_batch.append(this_batch)
 
