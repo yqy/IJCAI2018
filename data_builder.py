@@ -127,6 +127,7 @@ def generate_vector(path):
     zp_info = []
 
     HcP = [] 
+    '''
     f = open(args.data+"hcp")
     while True:
         line = f.readline()
@@ -134,6 +135,7 @@ def generate_vector(path):
         line = line.strip()
         HcP.append(line)
     f.close()
+    '''
 
     startt = timeit.default_timer()
     done_num = 0
@@ -326,6 +328,6 @@ def generate_vec(data_path):
 if __name__ == "__main__":
     setup()
     # get filtered embedding file
-    #embedding_filtering(args.raw_data)
+    embedding_filtering(args.raw_data)
     generate_vector_data()
     generate_input_data()
