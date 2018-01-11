@@ -70,7 +70,7 @@ def main():
         #optimizer = optim.RMSprop(model.parameters(),lr=this_lr)
 
         optimizer = optim.Adagrad(model.parameters(),lr=this_lr) #best
-        this_lr = this_lr*0.5
+        this_lr = this_lr*0.9
 
         for data in train_generater.generate_data(shuffle=True):
             #zp
